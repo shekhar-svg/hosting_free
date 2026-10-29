@@ -6,8 +6,8 @@ const FIELDS=['serial','brand','generation','model','specs','enquiry','purchaseD
 const HEADERS=['Serial Number','Brand','Processor Generation','Model','Specifications','Customer Enquiry','Purchase Date','Purchase Cost','Supplier','Purchase Invoice','Warranty Expiry','Status','Customer / Staff','Selling Price','Issue / Status Date','Notes'];
 // Supabase project settings: paste your Project URL and Publishable key below. Never use a secret/service-role key here.
 const SUPABASE_URL='https://vxukuuyglinpsrnlfvor.supabase.co';
-const PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE='PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE';
-const supabaseClient=(window.supabase&&SUPABASE_URL.startsWith('https://')&&PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE.startsWith('sb_publishable_'))?window.supabase.createClient(SUPABASE_URL,PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE):null;
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_egqYq3Sx4QzqsTVPu2sgiA_hc-evDm6';
+const supabaseClient=(window.supabase&&SUPABASE_URL.startsWith('https://')&&SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_'))?window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY):null;
 let remoteSyncEnabled=false,remoteSyncQueues={},storageSyncInstalled=false;
 let currentRole=null,editingId=null,laptops=loadData();
 const EMP_KEY='dosElectronicsEmployees_v1',COURIER_KEY='dosElectronicsCouriers_v1',PAYROLL_KEY='dosElectronicsPayroll_v1',CUSTOMER_KEY='dosElectronicsCustomers_v1';
