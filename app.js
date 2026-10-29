@@ -4,7 +4,11 @@ const KEY='officeLaptopStock_v2';
 const STATUSES=['In Stock','Dispatched','Issued','Sold','Repair','Replacement','Dent'];
 const FIELDS=['serial','brand','generation','model','specs','enquiry','purchaseDate','purchasePrice','supplier','invoice','warranty','status','holder','sellingPrice','movementDate','notes'];
 const HEADERS=['Serial Number','Brand','Processor Generation','Model','Specifications','Customer Enquiry','Purchase Date','Purchase Cost','Supplier','Purchase Invoice','Warranty Expiry','Status','Customer / Staff','Selling Price','Issue / Status Date','Notes'];
-const DEMO_USERS={admin:{username:'admin',password:'admin123'},employee:{username:'employee',password:'emp123'}};
+// Supabase project settings: paste your Project URL and Publishable key below. Never use a secret/service-role key here.
+const SUPABASE_URL='https://vxukuuyglinpsrnlfvor.supabase.co';
+const PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE='PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE';
+const supabaseClient=(window.supabase&&SUPABASE_URL.startsWith('https://')&&PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE.startsWith('sb_publishable_'))?window.supabase.createClient(SUPABASE_URL,PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE):null;
+let remoteSyncEnabled=false,remoteSyncQueues={},storageSyncInstalled=false;
 let currentRole=null,editingId=null,laptops=loadData();
 const EMP_KEY='dosElectronicsEmployees_v1',COURIER_KEY='dosElectronicsCouriers_v1',PAYROLL_KEY='dosElectronicsPayroll_v1',CUSTOMER_KEY='dosElectronicsCustomers_v1';
 let employees=readStore(EMP_KEY,[]),couriers=readStore(COURIER_KEY,[]),payrolls=readStore(PAYROLL_KEY,[]),customers=loadCustomers();
@@ -37,7 +41,7 @@ function makeId(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.rando
 function safeMoney(v){return Number(v||0).toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2})}
 function escAttr(v){return esc(v).replace(/'/g,'&#39;')}
 
-const requestedRole=new URLSearchParams(location.search).get('role');if(['employee','admin'].includes(requestedRole))$('loginRole').value=requestedRole;
+
 function loadData(){
   // Prefer the first populated compatible store. An empty v2 key must not mask
   // records that still exist under the previous version's key.
@@ -128,8 +132,8 @@ function numberToWords(num){if(!num)return 'Zero';const a=['','One','Two','Three
 function renderAll(){refreshDynamicOptions();renderDashboard();renderInventory();if($('customerTable'))renderCustomers();if(currentRole==='employee'||!$('customerFinder').classList.contains('hidden'))renderCustomerFinder();if(!$('stockin').classList.contains('hidden'))renderStockInForm();if(!$('stockout').classList.contains('hidden')){renderStockOutForm();renderOutTable()}if(!$('reports').classList.contains('hidden'))renderReports();if(!$('employees').classList.contains('hidden'))renderEmployees();if(!$('couriers').classList.contains('hidden'))renderCouriers();if(!$('payroll').classList.contains('hidden')){renderPayrollEmployees();renderPayroll()}}
 function showView(id){if(!currentRole)return;if(currentRole==='employee'&&id!=='customerFinder')return;document.querySelectorAll('.view').forEach(x=>x.classList.add('hidden'));$(id).classList.remove('hidden');document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.view===id));$('laptopFormSection').classList.add('hidden');if(id==='stockin')renderStockInForm();if(id==='challan'){refreshChallanLaptopOptions();refreshCustomerDropdown();if(!$('dcDate').value)$('dcDate').value=todayISO()}if(id==='quotation'){refreshQuotationCustomers();renderQuotationRegister();if(!$('qNumber').value)resetQuotation()}if(id==='customers')renderCustomers();if(id==='stockout'){renderStockOutForm();renderOutTable()}if(id==='reports')renderReports();if(id==='dashboard')renderDashboard();if(id==='inventory')renderInventory();if(id==='customerFinder'){refreshDynamicOptions();renderCustomerFinder()}if(id==='employees')renderEmployees();if(id==='couriers')renderCouriers();if(id==='payroll'){renderPayrollEmployees();renderPayroll()}}
 document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
-$('loginForm').addEventListener('submit',e=>{e.preventDefault();const role=$('loginRole').value,u=$('loginUsername').value.trim(),p=$('loginPassword').value,account=DEMO_USERS[role];if(u!==account.username||p!==account.password){$('loginMessage').textContent='Incorrect username or password.';return}currentRole=role;$('loginMessage').textContent='';$('loginPage').classList.add('hidden');$('appShell').classList.remove('hidden');$('userBadge').textContent=`Signed in: ${role}`;document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('hidden',role==='employee'&&b.dataset.view!=='customerFinder'));document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',role!=='admin'));showView(role==='employee'?'customerFinder':'dashboard');renderAll()});
-function logout(){currentRole=null;$('appShell').classList.add('hidden');$('loginPage').classList.remove('hidden');$('loginForm').reset();$('loginMessage').textContent=''}
+$('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginMessage').textContent='Connecting to database…';if(!supabaseClient){$('loginMessage').textContent='Supabase is not configured. Add your Project URL and Publishable key in app.js, then upload the file again.';return}const email=$('loginUsername').value.trim(),password=$('loginPassword').value;try{const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});if(error)throw error;await finishSupabaseLogin(data.user)}catch(err){console.error(err);$('loginMessage').textContent=err.message||'Sign-in failed. Check your email, password, and Supabase setup.'}});
+async function logout(){remoteSyncEnabled=false;currentRole=null;if(supabaseClient)await supabaseClient.auth.signOut();$('appShell').classList.add('hidden');$('loginPage').classList.remove('hidden');$('loginForm').reset();$('loginMessage').textContent=''}
 function openForm(id=null){if(currentRole!=='admin')return;editingId=id;const item=laptops.find(x=>x.id===id);$('laptopFormSection').classList.remove('hidden');$('formTitle').textContent=item?'Edit Laptop':'Add New Laptop';$('formMessage').textContent='';$('laptopForm').reset();$('purchaseDate').value=todayISO();refreshDynamicOptions();if(item)FIELDS.forEach(k=>{if($(k))$(k).value=item[k]??''});$('laptopFormSection').scrollIntoView({behavior:'smooth',block:'start'})}
 function closeForm(){$('laptopFormSection').classList.add('hidden');editingId=null}
 function resetForm(){$('laptopForm').reset();$('purchaseDate').value=todayISO()}
@@ -711,3 +715,109 @@ function deleteReplacement(id){const x=replacements.find(y=>y.id===id);if(!x)ret
 function exportReplacementsCSV(){if(!replacements.length){alert('No replacement records to export.');return;}const cols=['Reference','Supplier','Old Serial','Old Model','Date Sent','New Serial','New Brand','New Model','Specifications','Date Received','Invoice / RMA','Condition','Status','Notes'];const keys=['reference','supplier','oldSerial','oldModel','dateSent','newSerial','newBrand','newModel','newSpecs','dateReceived','invoice','condition','status','notes'];const csv=[cols,...replacements.map(x=>keys.map(k=>x[k]??''))].map(row=>row.map(csvCell).join(',')).join('\r\n');download('dos-electronics-replacements.csv',csv,'text/csv;charset=utf-8');}
 // Keep replacement module current after the app's normal navigation.
 document.querySelectorAll('.nav[data-view="replacement"]').forEach(b=>b.addEventListener('click',()=>renderReplacementModule()));
+
+
+/* ===== SUPABASE SQL DATABASE CONNECTION =====
+   app_records stores one JSON array per module. This is a migration-friendly bridge
+   for the existing app. For simultaneous edits by many users, move to row-per-record
+   tables/operations before relying on concurrent editing. */
+const SUPABASE_COLLECTIONS = () => [
+  { key: KEY, collection: 'laptops' },
+  { key: CUSTOMER_KEY, collection: 'customers' },
+  { key: EMP_KEY, collection: 'employees' },
+  { key: COURIER_KEY, collection: 'couriers' },
+  { key: PAYROLL_KEY, collection: 'payrolls' },
+  { key: QUOTE_KEY, collection: 'quotations' },
+  { key: REPLACEMENT_KEY, collection: 'replacements' },
+  { key: 'dosElectronicsDeliveryChallans_v1', collection: 'delivery_challans' }
+];
+function showDatabaseMessage(message, isError=false){
+  const el=$('dbSyncStatus');
+  if(el){el.textContent=message;el.style.color=isError?'#b42318':'#08784e';}
+  if(isError)console.error(message);
+}
+async function getCurrentUserRole(user){
+  const {data,error}=await supabaseClient.from('user_roles').select('role,active').eq('user_id',user.id).maybeSingle();
+  if(error)throw new Error('Cannot read user role. Check the user_roles table and RLS policies: '+error.message);
+  if(!data||data.active!==true||!['admin','employee'].includes(data.role))throw new Error('Your account has no active Dos Electronics role. Ask the administrator to add your email in public.user_roles.');
+  return data.role;
+}
+function safeReadArray(key){try{const v=JSON.parse(localStorage.getItem(key)||'null');return Array.isArray(v)?v:[]}catch{return []}}
+async function loadCollectionsFromDatabase(){
+  const defs=SUPABASE_COLLECTIONS();
+  const {data:rows,error}=await supabaseClient.from('app_records').select('collection,record_id,data').eq('record_id','all');
+  if(error)throw new Error('Could not read app_records. Check SQL policies: '+error.message);
+  const byName=new Map((rows||[]).map(r=>[r.collection,r]));
+  for(const def of defs){
+    const row=byName.get(def.collection);
+    if(row){localStorage.setItem(def.key,JSON.stringify(Array.isArray(row.data)?row.data:[]));}
+    else {
+      // If this browser already has records, seed only the missing module.
+      const local=safeReadArray(def.key);
+      if(local.length && currentRole==='admin') await upsertCollection(def.collection,local);
+      else if(currentRole==='employee' && def.collection!=='laptops') localStorage.setItem(def.key,'[]');
+      else if(!local.length) localStorage.setItem(def.key,'[]');
+    }
+  }
+  // Refresh the application's in-memory arrays after the remote pull.
+  laptops=loadData(); employees=readStore(EMP_KEY,[]); couriers=readStore(COURIER_KEY,[]);
+  payrolls=readStore(PAYROLL_KEY,[]); customers=loadCustomers();
+  quotations=readStore(QUOTE_KEY,[]); replacements=readStore(REPLACEMENT_KEY,[]);
+}
+async function upsertCollection(collection, data){
+  if(!supabaseClient)throw new Error('Supabase is not configured.');
+  if(currentRole!=='admin')throw new Error('Only an admin can upload or modify shared records.');
+  const previous=remoteSyncQueues[collection]||Promise.resolve();
+  const next=previous.catch(()=>{}).then(async()=>{
+    const {error}=await supabaseClient.from('app_records').upsert({collection,record_id:'all',data,updated_at:new Date().toISOString()},{onConflict:'collection,record_id'});
+    if(error)throw error;
+  });
+  remoteSyncQueues[collection]=next;
+  await next;
+}
+function installStorageSync(){
+  if(storageSyncInstalled)return;storageSyncInstalled=true;
+  const originalSet=Storage.prototype.setItem;
+  Storage.prototype.setItem=function(key,value){
+    originalSet.call(this,key,value);
+    if(this!==window.localStorage||!remoteSyncEnabled||currentRole!=='admin')return;
+    const def=SUPABASE_COLLECTIONS().find(x=>x.key===key);if(!def)return;
+    try{const data=JSON.parse(value);if(!Array.isArray(data))return;
+      upsertCollection(def.collection,data).then(()=>showDatabaseMessage('Saved to Supabase: '+def.collection)).catch(err=>showDatabaseMessage('Database save failed for '+def.collection+': '+(err.message||err),true));
+    }catch(err){showDatabaseMessage('Could not sync '+def.collection+': '+err.message,true)}
+  };
+}
+async function uploadAllLocalCollections(){
+  if(currentRole!=='admin'){alert('Only an admin can sync records to the database.');return}
+  if(!supabaseClient){alert('Supabase is not configured in app.js.');return}
+  if(!confirm('Upload this browser’s current records to Supabase? Existing records in each matching module will be replaced by this browser’s data. Download a backup first.'))return;
+  try{
+    remoteSyncEnabled=false;
+    for(const def of SUPABASE_COLLECTIONS()) await upsertCollection(def.collection,safeReadArray(def.key));
+    remoteSyncEnabled=true;
+    showDatabaseMessage('All current browser records uploaded to Supabase.');
+    alert('Upload complete. Check Table Editor → app_records.');
+  }catch(err){remoteSyncEnabled=true;showDatabaseMessage('Upload failed: '+(err.message||err),true);alert('Upload failed: '+(err.message||err));}
+}
+async function finishSupabaseLogin(user){
+  currentRole=await getCurrentUserRole(user);
+  remoteSyncEnabled=false;
+  await loadCollectionsFromDatabase();
+  installStorageSync();remoteSyncEnabled=true;
+  $('loginMessage').textContent='';$('loginPage').classList.add('hidden');$('appShell').classList.remove('hidden');
+  $('userBadge').textContent=`Signed in: ${currentRole} (${user.email||''})`;
+  document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('hidden',currentRole==='employee'&&b.dataset.view!=='customerFinder'));
+  document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',currentRole!=='admin'));
+  showView(currentRole==='employee'?'customerFinder':'dashboard');renderAll();
+  renderCustomers();refreshCustomerDropdown();renderReplacementModule();
+  if(typeof renderQuotationRegister==='function')renderQuotationRegister();
+  if(typeof renderChallanTable==='function')renderChallanTable();
+  showDatabaseMessage('Connected to Supabase.');
+}
+async function initializeSupabaseSession(){
+  if(!supabaseClient){$('loginMessage').textContent='Setup required: add your Supabase Project URL and Publishable key in app.js.';return;}
+  const {data,error}=await supabaseClient.auth.getSession();
+  if(error){$('loginMessage').textContent='Could not check Supabase session: '+error.message;return;}
+  if(data.session){try{await finishSupabaseLogin(data.session.user)}catch(err){console.error(err);$('loginMessage').textContent=err.message||'Could not load your shared database records.';await supabaseClient.auth.signOut()}}
+}
+initializeSupabaseSession();
